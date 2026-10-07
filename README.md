@@ -75,7 +75,7 @@ The API will be available at: http://localhost:8000
 
 ## Deployed Frontend and Backend Links
 
-- Frontend: https://zoom-clone-frontend.vercel.app
+- Frontend: https://zoom-clone-two-kappa.vercel.app/
 - Backend: https://zoom-clone-backend-vie2.onrender.com
 
 ## How WebSocket Communication Is Used

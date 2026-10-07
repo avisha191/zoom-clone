@@ -1665,7 +1665,7 @@ export default function MeetingRoom() {
     async () => {
       try {
         const link =
-          window.location.href;
+          `${window.location.origin}/meeting/${meetingId}`;
 
         await navigator.clipboard.writeText(
           link

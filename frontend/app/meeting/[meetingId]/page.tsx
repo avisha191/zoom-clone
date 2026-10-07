@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Mic, MicOff, Video, VideoOff } from "lucide-react";
 
@@ -25,6 +25,9 @@ export default function MeetingPage() {
   const name =
     searchParams.get("name") || "Guest";
 
+  const initialName =
+    name && name.trim() ? name : "Guest";
+
 
   const [meeting, setMeeting] =
     useState<Meeting | null>(null);
@@ -34,6 +37,9 @@ export default function MeetingPage() {
 
   const [error, setError] =
     useState("");
+
+  const [displayName, setDisplayName] =
+    useState(name);
 
 
   const [cameraOn, setCameraOn] =
@@ -48,6 +54,30 @@ export default function MeetingPage() {
 
   const streamRef =
     useRef<MediaStream | null>(null);
+
+  const attachStreamToVideo = useCallback((videoElement: HTMLVideoElement | null = videoRef.current) => {
+    const video = videoElement;
+    const stream = streamRef.current;
+
+    if (!video || !stream) {
+      return;
+    }
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "true");
+    video.play().catch(() => undefined);
+  }, []);
+
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    attachStreamToVideo(node);
+  }, [attachStreamToVideo]);
 
 
   // ==========================================
@@ -91,59 +121,59 @@ export default function MeetingPage() {
   // ==========================================
 
   useEffect(() => {
+    let cancelled = false;
 
     async function startCamera() {
-
-      if (!cameraOn) {
-        return;
-      }
-
       try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
 
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-
-          videoRef.current.srcObject =
-            stream;
-
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
         }
 
+        streamRef.current = stream;
+        attachStreamToVideo();
       } catch (error) {
-
-        console.error(
-          "Camera permission error:",
-          error
-        );
-
+        console.error("Camera permission error:", error);
       }
-
     }
 
     startCamera();
 
-
     return () => {
+      cancelled = true;
 
       if (streamRef.current) {
-
-        streamRef.current
-          .getTracks()
-          .forEach((track) =>
-            track.stop()
-          );
-
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
 
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     };
+  }, [attachStreamToVideo]);
 
-  }, [cameraOn]);
+  useEffect(() => {
+    if (!streamRef.current) {
+      return;
+    }
+
+    const videoTracks = streamRef.current.getVideoTracks();
+    videoTracks.forEach((track) => {
+      track.enabled = cameraOn;
+    });
+
+    if (cameraOn) {
+      attachStreamToVideo();
+    } else if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, [cameraOn, attachStreamToVideo]);
 
 
   // ==========================================
@@ -173,13 +203,18 @@ export default function MeetingPage() {
   // ==========================================
 
   const handleJoinMeeting = () => {
+    const nextName = displayName.trim();
+
+    if (!nextName) {
+      setError("Please enter your display name.");
+      return;
+    }
 
     router.push(
       `/meeting/${meetingId}/room?name=${encodeURIComponent(
-        name
+        nextName
       )}`
     );
-
   };
 
 
@@ -329,7 +364,7 @@ export default function MeetingPage() {
             {cameraOn ? (
 
               <video
-                ref={videoRef}
+                ref={setVideoRef}
                 autoPlay
                 muted
                 playsInline
@@ -343,9 +378,7 @@ export default function MeetingPage() {
                 <div className="text-center">
 
                   <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#4a4c50] text-2xl font-semibold">
-                    {name
-                      .charAt(0)
-                      .toUpperCase()}
+                    {displayName.trim().charAt(0).toUpperCase() || "G"}
                   </div>
 
                   <p className="mt-4 text-sm text-[#b8b9bb]">
@@ -362,7 +395,7 @@ export default function MeetingPage() {
             {/* Name label */}
 
             <div className="absolute bottom-4 left-4 rounded-lg bg-black/60 px-3 py-2 text-sm">
-              {name}
+              {displayName.trim() || "Guest"}
             </div>
 
           </div>
@@ -433,19 +466,26 @@ export default function MeetingPage() {
 
 
           {/* ==================================
-              USER NAME
+              DISPLAY NAME INPUT
           ================================== */}
 
-          <div className="shrink-0 text-center">
-
-            <p className="text-sm text-[#9fa1a5]">
-              Joining as
-            </p>
-
-            <p className="mt-1 text-base font-medium">
-              {name}
-            </p>
-
+          <div className="w-full max-w-[360px] shrink-0 text-left">
+            <label htmlFor="displayName" className="mb-2 block text-sm text-[#9fa1a5]">
+              Display Name
+            </label>
+            <input
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleJoinMeeting();
+                }
+              }}
+              placeholder="Enter your name"
+              className="w-full rounded-xl border border-[#3a3c40] bg-[#202225] px-4 py-3 text-sm text-white outline-none placeholder:text-[#8e9197] focus:border-[#0b5cff]"
+            />
           </div>
 
 
