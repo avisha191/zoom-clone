@@ -80,12 +80,12 @@ export default function Sidebar() {
       <div className="border-t border-[#eef0f3] p-4">
         <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#f7f8fa]">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e8f1ff] text-sm font-semibold text-[#0b5cff]">
-            AS
+            Y
           </div>
 
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-[#232333]">
-              Avisha Sahu
+              You
             </p>
 
             <p className="truncate text-xs text-[#9ca3af]">

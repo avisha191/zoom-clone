@@ -13,7 +13,7 @@ export default function JoinMeeting() {
     useState("");
 
   const [displayName, setDisplayName] =
-    useState("Avisha Sahu");
+    useState("You");
 
   const [loading, setLoading] =
     useState(false);

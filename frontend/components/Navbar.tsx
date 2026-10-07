@@ -55,12 +55,12 @@ export default function Navbar() {
 
         <button className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-[#f5f6f8]">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e8f1ff] text-xs font-bold text-[#0b5cff]">
-            AS
+            Y
           </div>
 
           <div className="hidden text-left sm:block">
             <p className="text-[13px] font-semibold text-[#232333]">
-              Avisha
+              You
             </p>
 
             <p className="text-[11px] text-[#9ca3af]">

@@ -38,7 +38,7 @@ class ConnectionManager:
         #   meeting_id: {
         #       participant_id: {
         #           "websocket": websocket,
-        #           "name": "Avisha",
+        #           "name": "Participant",
         #           "mic": True,
         #           "camera": True,
         #           "host": True
