@@ -1,5 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from datetime import datetime
+
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
@@ -7,6 +10,15 @@ from models import Meeting
 
 import random
 import time
+
+
+class MeetingCreate(BaseModel):
+
+    title: str = "Instant Meeting"
+    description: str = ""
+    meeting_type: str = "instant"
+    scheduled_time: datetime | None = None
+    duration: int | None = Field(default=None, gt=0)
 
 
 # ============================================================
@@ -1059,6 +1071,8 @@ def root():
 @app.post("/meetings")
 def create_meeting(
 
+    payload: MeetingCreate | None = Body(default=None),
+
     title: str = "Instant Meeting",
 
     description: str = "",
@@ -1068,6 +1082,29 @@ def create_meeting(
     db: Session = Depends(get_db)
 
 ):
+
+    meeting_title = payload.title if payload else title
+    meeting_description = payload.description if payload else description
+    meeting_type_value = payload.meeting_type if payload else meeting_type
+    scheduled_time = payload.scheduled_time if payload else None
+    duration = payload.duration if payload else None
+
+    if meeting_type_value == "scheduled":
+
+        if scheduled_time is None or duration is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Scheduled meetings require a date, time, and duration."
+            )
+
+        if scheduled_time.tzinfo is not None:
+            scheduled_time = scheduled_time.astimezone().replace(tzinfo=None)
+
+        if scheduled_time <= datetime.now():
+            raise HTTPException(
+                status_code=422,
+                detail="Scheduled time must be in the future."
+            )
 
     meeting_id = generate_meeting_id()
 
@@ -1088,13 +1125,19 @@ def create_meeting(
             meeting_id,
 
         title=
-            title,
+            meeting_title,
 
         description=
-            description,
+            meeting_description,
+
+        scheduled_time=
+            scheduled_time,
+
+        duration=
+            duration,
 
         meeting_type=
-            meeting_type
+            meeting_type_value
 
     )
 
@@ -1120,6 +1163,15 @@ def create_meeting(
 
         "title":
             meeting.title,
+
+        "description":
+            meeting.description,
+
+        "scheduled_time":
+            meeting.scheduled_time,
+
+        "duration":
+            meeting.duration,
 
         "meeting_type":
             meeting.meeting_type,
@@ -1469,10 +1521,6 @@ async def meeting_websocket(
             )
 
 
-            # ------------------------------------------------
-            # WAIT FOR HOST
-            # ------------------------------------------------
-
             while True:
 
                 message = (
@@ -1495,10 +1543,6 @@ async def meeting_websocket(
                 )
 
 
-                # ------------------------------------------------
-                # APPROVED
-                # ------------------------------------------------
-
                 if message_type == "waiting-approved":
 
                     manager.waiting_rooms[
@@ -1514,10 +1558,6 @@ async def meeting_websocket(
 
                     break
 
-
-                # ------------------------------------------------
-                # REJECTED
-                # ------------------------------------------------
 
                 if message_type == "waiting-rejected":
 
@@ -1968,14 +2008,16 @@ async def meeting_websocket(
 
             if message_type == "chat":
 
-                chat_text = message.get(
-
-                    "message",
-
-                    ""
-
+                chat_text = (
+                    message.get(
+                        "message",
+                        ""
+                    )
+                    or message.get(
+                        "text",
+                        ""
+                    )
                 )
-
 
                 if chat_text.strip():
 
@@ -2002,7 +2044,8 @@ async def meeting_websocket(
                                     time.time()
                                 )
 
-                        }
+                        },
+                        exclude=participant_id
 
                     )
 
@@ -2102,6 +2145,9 @@ async def meeting_websocket(
                                 "type":
                                     "force-mute",
 
+                                "participant_id":
+                                    target,
+
                                 "by":
                                     participant_name
 
@@ -2160,6 +2206,9 @@ async def meeting_websocket(
                                 "type":
                                     "force-camera-off",
 
+                                "participant_id":
+                                    target,
+
                                 "by":
                                     participant_name
 
@@ -2187,11 +2236,43 @@ async def meeting_websocket(
 
 
                     if (
-
                         target
                         and target != participant_id
-
                     ):
+
+                        target_data = manager.rooms.get(
+                            meeting_id,
+                            {}
+                        ).get(
+                            target
+                        )
+
+                        if target_data:
+
+                            try:
+
+                                await target_data[
+                                    "websocket"
+                                ].send_json({
+
+                                    "type":
+                                        "removed-by-host",
+
+                                    "participant_id":
+                                        target,
+
+                                    "message":
+                                        "You were removed by the host."
+
+                                })
+
+                                await target_data[
+                                    "websocket"
+                                ].close()
+
+                            except Exception:
+
+                                pass
 
                         await manager.send_to(
 
@@ -2204,6 +2285,9 @@ async def meeting_websocket(
                                 "type":
                                     "removed-by-host",
 
+                                "participant_id":
+                                    target,
+
                                 "message":
                                     "You were removed by the host."
 
@@ -2211,6 +2295,9 @@ async def meeting_websocket(
 
                         )
 
+                        await manager.broadcast_waiting_list(
+                            meeting_id
+                        )
 
                     continue
 
