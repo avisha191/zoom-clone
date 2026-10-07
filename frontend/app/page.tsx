@@ -86,7 +86,7 @@ export default function Home() {
 
     updateClock();
 
-    const interval = window.setInterval(updateClock, 60_000);
+    const interval = window.setInterval(updateClock, 15_000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -237,12 +237,30 @@ export default function Home() {
         meeting.meeting_type === "scheduled" &&
         meeting.scheduled_time &&
         currentTime !== null &&
-        new Date(meeting.scheduled_time).getTime() > currentTime
+        new Date(meeting.scheduled_time).getTime() +
+          (meeting.duration ?? 0) * 60_000 >
+          currentTime
     )
     .sort(
       (first, second) =>
         new Date(first.scheduled_time || 0).getTime() -
         new Date(second.scheduled_time || 0).getTime()
+    );
+
+  const recentMeetings = meetings
+    .filter(
+      (meeting) =>
+        meeting.meeting_type === "scheduled" &&
+        meeting.scheduled_time &&
+        currentTime !== null &&
+        new Date(meeting.scheduled_time).getTime() +
+          (meeting.duration ?? 0) * 60_000 <=
+          currentTime
+    )
+    .sort(
+      (first, second) =>
+        new Date(second.scheduled_time || 0).getTime() -
+        new Date(first.scheduled_time || 0).getTime()
     );
 
 
@@ -550,23 +568,58 @@ export default function Home() {
               </div>
 
 
-              <div className="rounded-xl border border-[#e5e7ed] bg-white p-2">
+              <div className="space-y-3">
 
-                <MeetingCard
-                  title="Project Discussion"
-                  date="Yesterday"
-                  time="4:30 PM"
-                  meetingId="521 903 741"
-                  type="recent"
-                />
+                {loadingMeetings ? (
 
-                <MeetingCard
-                  title="Design Review"
-                  date="Oct 4"
-                  time="2:00 PM"
-                  meetingId="761 428 305"
-                  type="recent"
-                />
+                  <div className="rounded-xl border border-[#e5e7ed] bg-white p-8 text-center">
+                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-[#e5e7eb] border-t-[#0b5cff]" />
+                    <p className="mt-3 text-xs text-[#6b7280]">
+                      Loading meetings...
+                    </p>
+                  </div>
+
+                ) : recentMeetings.length === 0 ? (
+
+                  <div className="rounded-xl border border-dashed border-[#d4d8e0] bg-white p-10 text-center">
+                    <h3 className="text-sm font-semibold text-[#232333]">
+                      No recent meetings
+                    </h3>
+                    <p className="mt-1 text-xs text-[#6b7280]">
+                      Completed scheduled meetings will appear here.
+                    </p>
+                  </div>
+
+                ) : (
+
+                  recentMeetings.map((meeting) => (
+                    <MeetingCard
+                      key={meeting.id}
+                      title={meeting.title}
+                      date={
+                        meeting.scheduled_time
+                          ? new Date(
+                              meeting.scheduled_time
+                            ).toLocaleDateString()
+                          : ""
+                      }
+                      time={
+                        meeting.scheduled_time
+                          ? new Date(
+                              meeting.scheduled_time
+                            ).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""
+                      }
+                      meetingId={meeting.meeting_id}
+                      duration={meeting.duration}
+                      type="recent"
+                    />
+                  ))
+
+                )}
 
               </div>
 
