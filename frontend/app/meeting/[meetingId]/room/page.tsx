@@ -658,7 +658,7 @@ export default function MeetingRoom() {
 
         socket =
           new WebSocket(
-            `ws://127.0.0.1:8000/ws/meetings/${meetingId}`
+            `wss://zoom-clone-backend-vie2.onrender.com/ws/meetings/${meetingId}`
           );
 
         socketRef.current =
