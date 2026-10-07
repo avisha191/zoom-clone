@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -1010,17 +1011,24 @@ Base.metadata.create_all(
 # CORS
 # ============================================================
 
+FRONTEND_URL = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:3000"
+).rstrip("/")
+
+FRONTEND_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+if FRONTEND_URL not in FRONTEND_ORIGINS:
+    FRONTEND_ORIGINS.append(FRONTEND_URL)
+
 app.add_middleware(
 
     CORSMiddleware,
 
-    allow_origins=[
-
-        "http://localhost:3000",
-
-        "http://127.0.0.1:3000"
-
-    ],
+    allow_origins=FRONTEND_ORIGINS,
 
     allow_credentials=True,
 
@@ -1178,7 +1186,7 @@ def create_meeting(
 
         "meeting_link":
             (
-                f"http://localhost:3000/"
+                f"{FRONTEND_URL}/"
                 f"meeting/{meeting.meeting_id}"
             )
 
