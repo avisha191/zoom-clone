@@ -149,18 +149,6 @@ export default function MeetingRoom() {
   const [handRaised, setHandRaised] =
     useState(false);
 
-  const [waitingForApproval, setWaitingForApproval] =
-    useState(false);
-
-  const [waitingMessage, setWaitingMessage] =
-    useState("");
-
-  const [waitingParticipants, setWaitingParticipants] =
-    useState<Participant[]>([]);
-
-  const [waitingRoomEnabled, setWaitingRoomEnabled] =
-    useState(false);
-
   const [meetingEnded, setMeetingEnded] =
     useState(false);
 
@@ -956,73 +944,6 @@ export default function MeetingRoom() {
               ) {
                 await handleIceCandidate(
                   message
-                );
-                return;
-              }
-
-              if (
-                message.type ===
-                "waiting"
-              ) {
-                setWaitingForApproval(true);
-                setWaitingMessage(
-                  message.message ||
-                    "Waiting for the host to let you in."
-                );
-                return;
-              }
-
-              if (
-                message.type ===
-                "waiting-list"
-              ) {
-                setWaitingParticipants(
-                  message.participants ||
-                    []
-                );
-                return;
-              }
-
-              if (
-                message.type ===
-                "waiting-approved"
-              ) {
-                setWaitingForApproval(false);
-                setWaitingMessage("");
-                return;
-              }
-
-              if (
-                message.type ===
-                "waiting-rejected"
-              ) {
-                setWaitingForApproval(false);
-                setWaitingMessage(
-                  message.message ||
-                    "The host did not allow you to join."
-                );
-
-                const socket =
-                  socketRef.current;
-                if (
-                  socket &&
-                  socket.readyState ===
-                    WebSocket.OPEN
-                ) {
-                  socket.close();
-                }
-
-                return;
-              }
-
-              if (
-                message.type ===
-                "waiting-room-status"
-              ) {
-                setWaitingRoomEnabled(
-                  Boolean(
-                    message.enabled
-                  )
                 );
                 return;
               }
@@ -1879,31 +1800,6 @@ export default function MeetingRoom() {
     );
   }
 
-  if (waitingForApproval) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#18181b] px-6 text-white">
-        <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#202124] p-8 text-center shadow-2xl">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20 text-2xl">
-            ⏳
-          </div>
-          <h2 className="text-2xl font-semibold">
-            Waiting for approval
-          </h2>
-          <p className="mt-3 text-sm text-white/70">
-            {waitingMessage ||
-              "Waiting for the host to let you in."}
-          </p>
-          <button
-            onClick={leaveMeeting}
-            className="mt-6 rounded-xl bg-red-500 px-5 py-3 text-sm font-semibold hover:bg-red-600"
-          >
-            Leave meeting
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const videoTileCount = participants.length + 1;
   const videoGridColumns =
     videoTileCount === 1
@@ -2162,53 +2058,6 @@ export default function MeetingRoom() {
             </div>
             <div className="text-xs text-green-400">Connected</div>
           </div>
-
-          {isHost && waitingParticipants.length > 0 && (
-            <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-yellow-200">
-                Waiting room
-              </p>
-
-              {waitingParticipants.map((participant) => (
-                <div
-                  key={participant.participant_id}
-                  className="mb-2 rounded-lg bg-black/20 p-2"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{participant.name}</p>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() =>
-                          socketRef.current?.send(
-                            JSON.stringify({
-                              type: "approve-participant",
-                              target: participant.participant_id,
-                            })
-                          )
-                        }
-                        className="rounded bg-green-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-green-600"
-                      >
-                        Admit
-                      </button>
-                      <button
-                        onClick={() =>
-                          socketRef.current?.send(
-                            JSON.stringify({
-                              type: "reject-participant",
-                              target: participant.participant_id,
-                            })
-                          )
-                        }
-                        className="rounded bg-red-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-red-600"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
 
           {participants.map((participant) => (
             <div

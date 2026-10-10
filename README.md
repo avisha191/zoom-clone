@@ -7,7 +7,7 @@ A real-time video conferencing application inspired by Zoom, built for instant m
 - Instant meeting creation and scheduled meetings
 - Real-time participant join/leave tracking
 - Audio and video toggle for each participant
-- Host controls, waiting room support, and meeting status updates
+- Host controls and meeting status updates
 - Chat, reactions, and raised-hand interactions
 - WebRTC-based peer-to-peer media streaming for live meetings
 - SQLite-backed meeting persistence
@@ -84,7 +84,6 @@ The application uses WebSockets to manage real-time meeting state. Once a user j
 
 - participant joins and leaves
 - mic and camera status changes
-- waiting-room approvals and rejections
 - meeting start/end events
 - WebRTC signaling messages (`offer`, `answer`, `ice-candidate`)
 

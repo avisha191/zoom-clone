@@ -50,19 +50,12 @@ class ConnectionManager:
         self.rooms = {}
 
         # ----------------------------------------------------
-        # WAITING ROOMS
-        # ----------------------------------------------------
-
-        self.waiting_rooms = {}
-
-        # ----------------------------------------------------
         # MEETING SETTINGS
         # ----------------------------------------------------
         #
         # meeting_settings = {
         #   meeting_id: {
         #       "host_id": "...",
-        #       "waiting_room": False,
         #       "started_at": ...
         #   }
         # }
@@ -87,17 +80,11 @@ class ConnectionManager:
 
             self.rooms[meeting_id] = {}
 
-        if meeting_id not in self.waiting_rooms:
-
-            self.waiting_rooms[meeting_id] = {}
-
         if meeting_id not in self.meeting_settings:
 
             self.meeting_settings[meeting_id] = {
 
                 "host_id": None,
-
-                "waiting_room": False,
 
                 "started_at": time.time()
             }
@@ -255,20 +242,6 @@ class ConnectionManager:
 
 
         # ----------------------------------------------------
-        # REMOVE FROM WAITING ROOM TOO
-        # ----------------------------------------------------
-
-        if meeting_id in self.waiting_rooms:
-
-            self.waiting_rooms[
-                meeting_id
-            ].pop(
-                participant_id,
-                None
-            )
-
-
-        # ----------------------------------------------------
         # HOST LEFT
         # Give host role to another participant.
         # ----------------------------------------------------
@@ -324,11 +297,6 @@ class ConnectionManager:
             del self.rooms[
                 meeting_id
             ]
-
-            self.waiting_rooms.pop(
-                meeting_id,
-                None
-            )
 
             self.meeting_settings.pop(
                 meeting_id,
@@ -387,43 +355,6 @@ class ConnectionManager:
                     data.get(
                         "host",
                         False
-                    )
-            })
-
-
-        return result
-
-
-    # ========================================================
-    # WAITING PARTICIPANT LIST
-    # ========================================================
-
-    def get_waiting_participants(
-        self,
-        meeting_id: str
-    ):
-
-        if meeting_id not in self.waiting_rooms:
-
-            return []
-
-
-        result = []
-
-
-        for participant_id, data in self.waiting_rooms[
-            meeting_id
-        ].items():
-
-            result.append({
-
-                "participant_id":
-                    participant_id,
-
-                "name":
-                    data.get(
-                        "name",
-                        "Guest"
                     )
             })
 
@@ -768,49 +699,6 @@ class ConnectionManager:
 
 
     # ========================================================
-    # WAITING ROOM
-    # ========================================================
-
-    def set_waiting_room(
-        self,
-        meeting_id: str,
-        enabled: bool
-    ):
-
-        self.ensure_room(
-            meeting_id
-        )
-
-
-        self.meeting_settings[
-            meeting_id
-        ][
-            "waiting_room"
-        ] = enabled
-
-
-        return enabled
-
-
-    def waiting_room_enabled(
-        self,
-        meeting_id: str
-    ):
-
-        if meeting_id not in self.meeting_settings:
-
-            return False
-
-
-        return self.meeting_settings[
-            meeting_id
-        ].get(
-            "waiting_room",
-            False
-        )
-
-
-    # ========================================================
     # START TIME
     # ========================================================
 
@@ -876,50 +764,10 @@ class ConnectionManager:
 
 
         # ----------------------------------------------------
-        # Notify waiting participants
-        # ----------------------------------------------------
-
-        if meeting_id in self.waiting_rooms:
-
-            for participant_id, data in list(
-                self.waiting_rooms[
-                    meeting_id
-                ].items()
-            ):
-
-                try:
-
-                    await data[
-                        "websocket"
-                    ].send_json({
-
-                        "type":
-                            "meeting-ended",
-
-                        "message":
-                            "The host ended the meeting."
-
-                    })
-
-                    await data[
-                        "websocket"
-                    ].close()
-
-                except Exception:
-
-                    pass
-
-
-        # ----------------------------------------------------
         # CLEANUP
         # ----------------------------------------------------
 
         self.rooms.pop(
-            meeting_id,
-            None
-        )
-
-        self.waiting_rooms.pop(
             meeting_id,
             None
         )
@@ -931,55 +779,6 @@ class ConnectionManager:
 
         self.ended_meetings.add(
             meeting_id
-        )
-
-
-    # ========================================================
-    # BROADCAST WAITING LIST TO HOST
-    # ========================================================
-
-    async def broadcast_waiting_list(
-        self,
-        meeting_id: str
-    ):
-
-        settings = self.meeting_settings.get(
-            meeting_id
-        )
-
-
-        if not settings:
-
-            return
-
-
-        host_id = settings.get(
-            "host_id"
-        )
-
-
-        if not host_id:
-
-            return
-
-
-        await self.send_to(
-
-            meeting_id,
-
-            host_id,
-
-            {
-
-                "type":
-                    "waiting-list",
-
-                "participants":
-                    self.get_waiting_participants(
-                        meeting_id
-                    )
-
-            }
         )
 
 
@@ -1315,18 +1114,8 @@ def get_meeting_status(
                 meeting_id
             ),
 
-        "waiting_room":
-            manager.waiting_room_enabled(
-                meeting_id
-            ),
-
         "started_at":
             manager.get_started_at(
-                meeting_id
-            ),
-
-        "waiting_participants":
-            manager.get_waiting_participants(
                 meeting_id
             )
 
@@ -1455,140 +1244,6 @@ async def meeting_websocket(
         manager.ensure_room(
             meeting_id
         )
-
-
-        # ====================================================
-        # WAITING ROOM
-        # ====================================================
-
-        existing_count = (
-
-            manager.get_count(
-                meeting_id
-            )
-
-        )
-
-
-        waiting_enabled = (
-
-            manager.waiting_room_enabled(
-                meeting_id
-            )
-
-        )
-
-
-        should_wait = (
-
-            waiting_enabled
-            and existing_count > 0
-
-        )
-
-
-        if should_wait:
-
-            manager.waiting_rooms[
-                meeting_id
-            ][
-                participant_id
-            ] = {
-
-                "websocket":
-                    websocket,
-
-                "name":
-                    participant_name
-
-            }
-
-
-            print(
-
-                f"[WAITING ROOM] "
-                f"name={participant_name} "
-                f"meeting={meeting_id}"
-
-            )
-
-
-            await websocket.send_json({
-
-                "type":
-                    "waiting",
-
-                "message":
-                    "Waiting for the host to let you in."
-
-            })
-
-
-            await manager.broadcast_waiting_list(
-                meeting_id
-            )
-
-
-            while True:
-
-                message = (
-
-                    await websocket.receive_json()
-
-                )
-
-
-                print(
-
-                    f"[WAITING MESSAGE] "
-                    f"{message}"
-
-                )
-
-
-                message_type = message.get(
-                    "type"
-                )
-
-
-                if message_type == "waiting-approved":
-
-                    manager.waiting_rooms[
-                        meeting_id
-                    ].pop(
-                        participant_id,
-                        None
-                    )
-
-                    await manager.broadcast_waiting_list(
-                        meeting_id
-                    )
-
-                    break
-
-
-                if message_type == "waiting-rejected":
-
-                    manager.waiting_rooms[
-                        meeting_id
-                    ].pop(
-                        participant_id,
-                        None
-                    )
-
-                    await websocket.send_json({
-
-                        "type":
-                            "waiting-rejected",
-
-                        "message":
-                            "The host did not allow you to join."
-
-                    })
-
-                    await websocket.close()
-
-                    return
 
 
         # ====================================================
@@ -2072,12 +1727,6 @@ async def meeting_websocket(
 
                 "remove-participant",
 
-                "waiting-room",
-
-                "approve-participant",
-
-                "reject-participant",
-
                 "end-meeting"
 
             ]:
@@ -2303,163 +1952,6 @@ async def meeting_websocket(
 
                         )
 
-                        await manager.broadcast_waiting_list(
-                            meeting_id
-                        )
-
-                    continue
-
-
-                # =================================================
-                # WAITING ROOM ON / OFF
-                # =================================================
-
-                if message_type == "waiting-room":
-
-                    enabled = bool(
-
-                        message.get(
-                            "enabled",
-                            False
-                        )
-
-                    )
-
-
-                    manager.set_waiting_room(
-
-                        meeting_id,
-
-                        enabled
-
-                    )
-
-
-                    await manager.broadcast(
-
-                        meeting_id,
-
-                        {
-
-                            "type":
-                                "waiting-room-status",
-
-                            "enabled":
-                                enabled
-
-                        }
-
-                    )
-
-                    continue
-
-
-                # =================================================
-                # APPROVE PARTICIPANT
-                # =================================================
-
-                if message_type == "approve-participant":
-
-                    target = message.get(
-                        "target"
-                    )
-
-
-                    waiting_user = (
-
-                        manager.waiting_rooms
-                        .get(
-                            meeting_id,
-                            {}
-                        )
-                        .get(
-                            target
-                        )
-
-                    )
-
-
-                    if waiting_user:
-
-                        try:
-
-                            await waiting_user[
-                                "websocket"
-                            ].send_json({
-
-                                "type":
-                                    "waiting-approved"
-
-                            })
-
-                        except Exception as error:
-
-                            print(
-
-                                f"[APPROVE ERROR] "
-                                f"{error}"
-
-                            )
-
-                    continue
-
-
-                # =================================================
-                # REJECT PARTICIPANT
-                # =================================================
-
-                if message_type == "reject-participant":
-
-                    target = message.get(
-                        "target"
-                    )
-
-
-                    waiting_user = (
-
-                        manager.waiting_rooms
-                        .get(
-                            meeting_id,
-                            {}
-                        )
-                        .pop(
-                            target,
-                            None
-                        )
-
-                    )
-
-
-                    if waiting_user:
-
-                        try:
-
-                            await waiting_user[
-                                "websocket"
-                            ].send_json({
-
-                                "type":
-                                    "waiting-rejected",
-
-                                "message":
-                                    "The host rejected your request."
-
-                            })
-
-
-                            await waiting_user[
-                                "websocket"
-                            ].close()
-
-                        except Exception:
-
-                            pass
-
-
-                        await manager.broadcast_waiting_list(
-                            meeting_id
-                        )
-
                     continue
 
 
@@ -2595,17 +2087,6 @@ async def meeting_websocket(
                     # ----------------------------------------
 
                     await manager.broadcast_participant_list(
-
-                        meeting_id
-
-                    )
-
-
-                    # ----------------------------------------
-                    # WAITING LIST
-                    # ----------------------------------------
-
-                    await manager.broadcast_waiting_list(
 
                         meeting_id
 
