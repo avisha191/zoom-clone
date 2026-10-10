@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   useParams,
@@ -40,6 +41,11 @@ type ReactionMap = Record<
     at: number;
   }
 >;
+
+type ReactionMenuPosition = {
+  left: number;
+  bottom: number;
+};
 
 type RoomIconName =
   | "video"
@@ -167,6 +173,9 @@ export default function MeetingRoom() {
   const [reactionMenuOpen, setReactionMenuOpen] =
     useState(false);
 
+  const [reactionMenuPosition, setReactionMenuPosition] =
+    useState<ReactionMenuPosition | null>(null);
+
   const [error, setError] =
     useState("");
 
@@ -194,6 +203,12 @@ export default function MeetingRoom() {
 
   const participantIdRef =
     useRef<string>("");
+
+  const reactionButtonRef =
+    useRef<HTMLButtonElement | null>(null);
+
+  const reactionSequenceRef =
+    useRef(0);
 
   const formatElapsedTime =
     (totalSeconds: number) => {
@@ -1063,9 +1078,11 @@ export default function MeetingRoom() {
                   return;
                 }
 
+                reactionSequenceRef.current += 1;
+                const at = reactionSequenceRef.current;
                 const reaction = {
                   emoji: message.emoji || "👍",
-                  at: Date.now(),
+                  at,
                 };
 
                 setReactionMap(
@@ -1078,9 +1095,7 @@ export default function MeetingRoom() {
                 window.setTimeout(() => {
                   setReactionMap(
                     (previous) => {
-                      if (
-                        previous[targetId]
-                      ) {
+                      if (previous[targetId]?.at === at) {
                         const next = { ...previous };
                         delete next[targetId];
                         return next;
@@ -1655,11 +1670,13 @@ export default function MeetingRoom() {
       })
     );
 
+    reactionSequenceRef.current += 1;
+    const at = reactionSequenceRef.current;
     setReactionMap((previous) => ({
       ...previous,
       [participantIdRef.current]: {
         emoji,
-        at: Date.now(),
+        at,
       },
     }));
 
@@ -1667,11 +1684,40 @@ export default function MeetingRoom() {
 
     window.setTimeout(() => {
       setReactionMap((previous) => {
+        if (
+          previous[participantIdRef.current]?.at !== at
+        ) {
+          return previous;
+        }
+
         const next = { ...previous };
         delete next[participantIdRef.current];
         return next;
       });
     }, 2200);
+  };
+
+  const toggleReactionMenu = () => {
+    if (reactionMenuOpen) {
+      setReactionMenuOpen(false);
+      return;
+    }
+
+    const button = reactionButtonRef.current;
+    if (!button) {
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const menuWidth = 256;
+    setReactionMenuPosition({
+      left: Math.min(
+        Math.max(8, rect.left + rect.width / 2 - menuWidth / 2),
+        window.innerWidth - menuWidth - 8
+      ),
+      bottom: window.innerHeight - rect.top + 8,
+    });
+    setReactionMenuOpen(true);
   };
 
   const sendHostAction = (
@@ -2222,31 +2268,43 @@ export default function MeetingRoom() {
 
           <div className="relative">
             <button
-              onClick={() => setReactionMenuOpen(!reactionMenuOpen)}
+              ref={reactionButtonRef}
+              onClick={toggleReactionMenu}
               className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-1 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:h-14 sm:w-[68px] ${
                 reactionMenuOpen ? "bg-blue-600 text-white" : "text-white hover:bg-white/10"
               }`}
               title="Add reaction"
               aria-label="Open reactions"
+              aria-expanded={reactionMenuOpen}
             >
               <RoomIcon name="reaction" />
               <span className="hidden text-[10px] font-medium sm:block">Reactions</span>
             </button>
 
-            {reactionMenuOpen && (
-              <div className="absolute bottom-[calc(100%+12px)] left-1/2 flex -translate-x-1/2 gap-2 rounded-xl border border-white/10 bg-[#202124] p-2 shadow-xl">
-                {['👍', '🎉', '👏', '🔥', '❤️'].map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => sendReaction(emoji)}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-xl hover:bg-white/10"
-                    title={emoji}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
+            {reactionMenuOpen && reactionMenuPosition &&
+              createPortal(
+                <div
+                  className="fixed z-[60] flex gap-2 rounded-xl border border-white/10 bg-[#202124] p-2 shadow-xl"
+                  style={{
+                    left: reactionMenuPosition.left,
+                    bottom: reactionMenuPosition.bottom,
+                  }}
+                >
+                  {["👍", "🎉", "👏", "🔥", "❤️"].map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => sendReaction(emoji)}
+                      className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-xl hover:bg-white/10"
+                      title={emoji}
+                      aria-label={`Send ${emoji} reaction`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>,
+                document.body
+              )}
           </div>
 
           <button

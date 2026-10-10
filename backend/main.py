@@ -1617,7 +1617,9 @@ async def meeting_websocket(
                         "emoji":
                             emoji
 
-                    }
+                    },
+
+                    exclude=participant_id
 
                 )
 
