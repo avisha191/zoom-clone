@@ -115,6 +115,12 @@ export default function MeetingRoom() {
   const name =
     searchParams.get("name") || "Guest";
 
+  const initialMicOn =
+    searchParams.get("mic") !== "false";
+
+  const initialCameraOn =
+    searchParams.get("camera") !== "false";
+
   // =========================================================
   // STATE
   // =========================================================
@@ -132,10 +138,10 @@ export default function MeetingRoom() {
     useState(false);
 
   const [micOn, setMicOn] =
-    useState(true);
+    useState(initialMicOn);
 
   const [cameraOn, setCameraOn] =
-    useState(true);
+    useState(initialCameraOn);
 
   const [screenSharing, setScreenSharing] =
     useState(false);
@@ -194,6 +200,12 @@ export default function MeetingRoom() {
 
   const localStreamRef =
     useRef<MediaStream | null>(null);
+
+  const joinMicOnRef =
+    useRef(initialMicOn);
+
+  const joinCameraOnRef =
+    useRef(initialCameraOn);
 
   const screenStreamRef =
     useRef<MediaStream | null>(null);
@@ -286,6 +298,13 @@ export default function MeetingRoom() {
           video: true,
           audio: true,
         });
+
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = joinMicOnRef.current;
+      });
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = joinCameraOnRef.current;
+      });
 
       localStreamRef.current = stream;
 
@@ -692,6 +711,18 @@ export default function MeetingRoom() {
                   participantIdRef.current,
 
                 name,
+              })
+            );
+            socket?.send(
+              JSON.stringify({
+                type: "mic-status",
+                enabled: joinMicOnRef.current,
+              })
+            );
+            socket?.send(
+              JSON.stringify({
+                type: "camera-status",
+                enabled: joinCameraOnRef.current,
               })
             );
           };
@@ -1120,6 +1151,11 @@ export default function MeetingRoom() {
                   targetId ===
                   participantIdRef.current
                 ) {
+                  localStreamRef.current
+                    ?.getAudioTracks()
+                    .forEach((track) => {
+                      track.enabled = false;
+                    });
                   setMicOn(false);
                 }
 
@@ -1150,6 +1186,11 @@ export default function MeetingRoom() {
                   targetId ===
                   participantIdRef.current
                 ) {
+                  localStreamRef.current
+                    ?.getVideoTracks()
+                    .forEach((track) => {
+                      track.enabled = false;
+                    });
                   setCameraOn(false);
                 }
 
@@ -2034,6 +2075,22 @@ export default function MeetingRoom() {
                 playsInline
                 className="h-full w-full object-cover"
               />
+
+              {participant.camera === false && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#303134]">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#0b5cff] text-2xl font-semibold">
+                    {participant.name
+                      .trim()
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((part) => part.charAt(0).toUpperCase())
+                      .join("")}
+                  </div>
+                  <span className="max-w-[80%] truncate text-sm font-medium text-white/90">
+                    {participant.name}
+                  </span>
+                </div>
+              )}
 
               {participant.raised && (
                 <div className="absolute right-4 top-4 rounded-lg bg-yellow-500 px-3 py-1.5 text-xs font-semibold text-black">

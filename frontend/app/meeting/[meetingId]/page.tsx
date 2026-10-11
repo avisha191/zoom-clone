@@ -213,7 +213,7 @@ export default function MeetingPage() {
     router.push(
       `/meeting/${meetingId}/room?name=${encodeURIComponent(
         nextName
-      )}`
+      )}&mic=${micOn}&camera=${cameraOn}`
     );
   };
 
