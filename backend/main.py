@@ -4,9 +4,10 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy import DateTime, inspect, text
 from sqlalchemy.orm import Session
 
-from database import Base, engine, get_db
+from database import Base, engine, get_db, SessionLocal
 from models import Meeting
 
 import random
@@ -805,6 +806,37 @@ Base.metadata.create_all(
     bind=engine
 )
 
+with engine.begin() as connection:
+    meeting_columns = {
+        column["name"]
+        for column in inspect(connection).get_columns("meetings")
+    }
+    datetime_type = DateTime().compile(dialect=engine.dialect)
+    for column_name in ("created_at", "completed_at"):
+        if column_name not in meeting_columns:
+            connection.execute(
+                text(
+                    f"ALTER TABLE meetings ADD COLUMN "
+                    f"{column_name} {datetime_type}"
+                )
+            )
+
+
+def mark_meeting_completed(meeting_id: str) -> None:
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(
+            Meeting.meeting_id == meeting_id
+        ).first()
+        if meeting:
+            meeting.completed_at = datetime.utcnow()
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
 
 # ============================================================
 # CORS
@@ -983,6 +1015,12 @@ def create_meeting(
         "meeting_type":
             meeting.meeting_type,
 
+        "created_at":
+            meeting.created_at,
+
+        "completed_at":
+            meeting.completed_at,
+
         "meeting_link":
             (
                 f"{FRONTEND_URL}/"
@@ -1003,17 +1041,30 @@ def get_meetings(
 
 ):
 
-    return (
-
+    meetings = (
         db.query(Meeting)
-
         .order_by(
+            Meeting.created_at.desc(),
             Meeting.id.desc()
         )
-
         .all()
-
     )
+
+    return [
+        {
+            "id": meeting.id,
+            "meeting_id": meeting.meeting_id,
+            "title": meeting.title,
+            "description": meeting.description,
+            "scheduled_time": meeting.scheduled_time,
+            "duration": meeting.duration,
+            "meeting_type": meeting.meeting_type,
+            "created_at": meeting.created_at,
+            "completed_at": meeting.completed_at,
+            "is_active": manager.get_count(meeting.meeting_id) > 0,
+        }
+        for meeting in meetings
+    ]
 
 
 # ============================================================
@@ -1972,6 +2023,7 @@ async def meeting_websocket(
                     )
 
 
+                    mark_meeting_completed(meeting_id)
                     await manager.end_meeting(
                         meeting_id
                     )
@@ -2056,6 +2108,9 @@ async def meeting_websocket(
                     f"participants={count}"
 
                 )
+
+                if count == 0:
+                    mark_meeting_completed(meeting_id)
 
 
                 if meeting_id in manager.rooms:

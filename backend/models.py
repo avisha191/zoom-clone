@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import Column, Integer, String, DateTime, Text
 
 from database import Base
@@ -44,4 +46,15 @@ class Meeting(Base):
         String(20),
         nullable=False,
         default="instant"
+    )
+
+    created_at = Column(
+        DateTime,
+        nullable=True,
+        default=datetime.utcnow
+    )
+
+    completed_at = Column(
+        DateTime,
+        nullable=True
     )

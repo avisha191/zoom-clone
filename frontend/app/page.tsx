@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -21,17 +21,8 @@ import MeetingCard from "@/components/MeetingCard";
 import {
   createMeeting,
   getMeetings,
+  type Meeting,
 } from "@/lib/api";
-
-interface Meeting {
-  id: number;
-  meeting_id: string;
-  title: string;
-  description?: string;
-  scheduled_time?: string | null;
-  duration?: number | null;
-  meeting_type: string;
-}
 
 export default function Home() {
 
@@ -62,6 +53,9 @@ export default function Home() {
 
   const [loadingMeetings, setLoadingMeetings] =
     useState(true);
+
+  const [meetingsError, setMeetingsError] =
+    useState("");
 
   const [creatingMeeting, setCreatingMeeting] =
     useState(false);
@@ -95,33 +89,66 @@ export default function Home() {
   // LOAD MEETINGS FROM FASTAPI
   // ==========================================
 
-  useEffect(() => {
+  const loadMeetings = useCallback(async () => {
+    setLoadingMeetings(true);
+    setMeetingsError("");
 
-    async function loadMeetings() {
-
-      try {
-
-        const data = await getMeetings();
-
-        setMeetings(data);
-
-      } catch (error) {
-
-        console.error(
-          "Failed to load meetings:",
-          error
-        );
-
-      } finally {
-
-        setLoadingMeetings(false);
-
-      }
+    try {
+      setMeetings(await getMeetings());
+    } catch (error) {
+      console.error("Failed to load meetings:", error);
+      setMeetingsError(
+        error instanceof Error
+          ? error.message
+          : "Could not load meetings. Please try again."
+      );
+    } finally {
+      setLoadingMeetings(false);
     }
-
-    loadMeetings();
-
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getMeetings()
+      .then((data) => {
+        if (!cancelled) {
+          setMeetings(data);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.error("Failed to load meetings:", error);
+          setMeetingsError(
+            error instanceof Error
+              ? error.message
+              : "Could not load meetings. Please try again."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingMeetings(false);
+        }
+      });
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadMeetings();
+      }
+    };
+
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("pageshow", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("pageshow", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [loadMeetings]);
 
 
   // ==========================================
@@ -205,7 +232,7 @@ export default function Home() {
       ]);
 
       try {
-        setMeetings(await getMeetings());
+        await loadMeetings();
       } catch (refreshError) {
         console.error("Failed to refresh scheduled meetings:", refreshError);
       }
@@ -247,21 +274,40 @@ export default function Home() {
         new Date(second.scheduled_time || 0).getTime()
     );
 
+  const meetingHistoryDate = (meeting: Meeting) => {
+    if (meeting.completed_at) {
+      return new Date(meeting.completed_at).getTime();
+    }
+
+    if (meeting.scheduled_time) {
+      return (
+        new Date(meeting.scheduled_time).getTime() +
+        (meeting.duration ?? 0) * 60_000
+      );
+    }
+
+    if (meeting.created_at) {
+      return new Date(meeting.created_at).getTime();
+    }
+
+    return meeting.id;
+  };
+
   const recentMeetings = meetings
     .filter(
       (meeting) =>
-        meeting.meeting_type === "scheduled" &&
-        meeting.scheduled_time &&
-        currentTime !== null &&
-        new Date(meeting.scheduled_time).getTime() +
-          (meeting.duration ?? 0) * 60_000 <=
-          currentTime
+        Boolean(meeting.completed_at) ||
+        (Boolean(meeting.scheduled_time) &&
+          currentTime !== null &&
+          meetingHistoryDate(meeting) <= currentTime) ||
+        (meeting.meeting_type === "instant" &&
+          meeting.is_active !== true)
     )
     .sort(
       (first, second) =>
-        new Date(second.scheduled_time || 0).getTime() -
-        new Date(first.scheduled_time || 0).getTime()
-    );
+        meetingHistoryDate(second) - meetingHistoryDate(first)
+    )
+    .slice(0, 3);
 
 
   return (
@@ -480,6 +526,19 @@ export default function Home() {
 
                   </div>
 
+                ) : meetingsError ? (
+                  <div role="alert" className="rounded-xl border border-[#e5e7ed] bg-white p-8 text-center">
+                    <p className="text-sm text-[#6b7280]">
+                      Could not load meetings: {meetingsError}
+                    </p>
+                    <button
+                      onClick={() => void loadMeetings()}
+                      className="mt-3 text-xs font-semibold text-[#0b5cff] hover:underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+
                 ) : upcomingMeetings.length === 0 ? (
 
                   <div className="rounded-xl border border-dashed border-[#d4d8e0] bg-white p-10 text-center">
@@ -579,6 +638,19 @@ export default function Home() {
                     </p>
                   </div>
 
+                ) : meetingsError ? (
+                  <div role="alert" className="rounded-xl border border-[#e5e7ed] bg-white p-8 text-center">
+                    <p className="text-sm text-[#6b7280]">
+                      Could not load meeting history: {meetingsError}
+                    </p>
+                    <button
+                      onClick={() => void loadMeetings()}
+                      className="mt-3 text-xs font-semibold text-[#0b5cff] hover:underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+
                 ) : recentMeetings.length === 0 ? (
 
                   <div className="rounded-xl border border-dashed border-[#d4d8e0] bg-white p-10 text-center">
@@ -586,7 +658,7 @@ export default function Home() {
                       No recent meetings
                     </h3>
                     <p className="mt-1 text-xs text-[#6b7280]">
-                      Completed scheduled meetings will appear here.
+                      Completed meetings will appear here.
                     </p>
                   </div>
 
@@ -597,21 +669,29 @@ export default function Home() {
                       key={meeting.id}
                       title={meeting.title}
                       date={
-                        meeting.scheduled_time
+                        (meeting.completed_at ||
+                          meeting.scheduled_time ||
+                          meeting.created_at)
                           ? new Date(
-                              meeting.scheduled_time
+                              meeting.completed_at ||
+                                meeting.scheduled_time ||
+                                meeting.created_at!
                             ).toLocaleDateString()
-                          : ""
+                          : "Instant meeting"
                       }
                       time={
-                        meeting.scheduled_time
+                        (meeting.completed_at ||
+                          meeting.scheduled_time ||
+                          meeting.created_at)
                           ? new Date(
-                              meeting.scheduled_time
+                              meeting.completed_at ||
+                                meeting.scheduled_time ||
+                                meeting.created_at!
                             ).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
                             })
-                          : ""
+                          : "Completed"
                       }
                       meetingId={meeting.meeting_id}
                       duration={meeting.duration}

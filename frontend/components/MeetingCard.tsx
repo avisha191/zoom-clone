@@ -106,16 +106,7 @@ export default function MeetingCard({
           </button>
         </div>
 
-      ) : (
-
-        <button
-          onClick={handleJoin}
-          className="ml-4 hidden shrink-0 rounded-[9px] border border-[#e1e3e8] px-4 py-2 text-xs font-semibold text-[#454556] transition hover:bg-[#f8f9fb] sm:block"
-        >
-          Details
-        </button>
-
-      )}
+      ) : null}
 
     </div>
   );
